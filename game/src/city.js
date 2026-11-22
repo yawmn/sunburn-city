@@ -2,7 +2,7 @@
 // Builds street grid, art-deco downtown, beachfront boulevard, beach, ocean, marina,
 // park, industrial warehouse district, strip malls, props, solids, and prerendered ground layer.
 
-import { createRng } from './rng.js';
+import { createRng, intRange } from './rng.js';
 
 export const WORLD_W = 4400;
 export const WORLD_H = 3200;
@@ -606,6 +606,29 @@ export function createCity(seed = 1) {
   // Docks solids
   for (const pier of marina.piers) {
     addSolid(pier.x, pier.y, pier.w, pier.h);
+  }
+
+  // Extra street props: benches along Ocean Drive promenade and hydrants at sidewalk corners
+  const benchSpacing = intRange(160, 200);
+  for (let py = 280; py < WORLD_H - 250; py += benchSpacing) {
+    props.push({
+      type: 'bench',
+      x: 3584,
+      y: py,
+      rot: -Math.PI / 2, // Facing west toward the beachfront sidewalk
+    });
+  }
+
+  for (let c = 0; c < avenues.length - 1; c++) {
+    const avX = avenues[c];
+    for (let r = 0; r < streets.length - 1; r++) {
+      const stY = streets[r];
+      props.push({
+        type: 'hydrant',
+        x: avX + ROAD_W / 2 + 12,
+        y: stY + ROAD_W / 2 + 12,
+      });
+    }
   }
 
   // 8. Prerender function for static ground layer

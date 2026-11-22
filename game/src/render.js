@@ -447,7 +447,7 @@ export function createRenderer(canvas, ctx, world) {
   }
 
   return {
-    render(player, camera, entities = [], time = 0, combat = null, police = null) {
+    render(player, camera, entities = [], time = 0, combat = null, police = null, missions = null) {
       const bounds = camera.bounds();
 
       // Clear frame
@@ -713,15 +713,27 @@ export function createRenderer(canvas, ctx, world) {
       if (police && police.drawWorld) {
         police.drawWorld(ctx, time);
       }
+      if (missions && missions.drawWorld) {
+        missions.drawWorld(ctx, camera, time);
+      }
 
       ctx.restore(); // Camera transform restored
 
-      // 8. Post-Processing: Golden-Hour Warm Sky Tint & Vignette
+      // 8. Post-Processing: Golden-Hour Warm Sky Tint, Sun Glare & Grain
       const skyGrad = ctx.createLinearGradient(0, 0, 1280, 0);
-      skyGrad.addColorStop(0, 'rgba(255, 140, 50, 0.08)'); // Sunset warmth in west
-      skyGrad.addColorStop(0.65, 'rgba(255, 80, 120, 0.05)');
-      skyGrad.addColorStop(1, 'rgba(30, 80, 160, 0.08)'); // Deep dusk turquoise in east over ocean
+      skyGrad.addColorStop(0, 'rgba(255, 140, 50, 0.12)'); // Sunset warmth in west
+      skyGrad.addColorStop(0.4, 'rgba(255, 95, 75, 0.08)');
+      skyGrad.addColorStop(0.75, 'rgba(255, 60, 140, 0.06)');
+      skyGrad.addColorStop(1, 'rgba(20, 70, 160, 0.09)'); // Deep dusk turquoise in east over ocean
       ctx.fillStyle = skyGrad;
+      ctx.fillRect(0, 0, 1280, 720);
+
+      // Subtle warm sun glare bloom along upper-west horizon
+      const glareGrad = ctx.createRadialGradient(200, 70, 10, 200, 70, 340);
+      glareGrad.addColorStop(0, 'rgba(255, 235, 170, 0.15)');
+      glareGrad.addColorStop(0.5, 'rgba(255, 150, 70, 0.06)');
+      glareGrad.addColorStop(1, 'rgba(255, 100, 50, 0)');
+      ctx.fillStyle = glareGrad;
       ctx.fillRect(0, 0, 1280, 720);
 
       // Subtle film grain overlay

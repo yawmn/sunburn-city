@@ -183,7 +183,7 @@ export function createHud() {
   return {
     drawWordmark,
 
-    drawPlaying(ctx, player, world, minimap, timeStr = '18:42', trafficCars = [], police = null, combat = null, time = 0) {
+    drawPlaying(ctx, player, world, minimap, timeStr = '18:42', trafficCars = [], police = null, combat = null, time = 0, missions = null, camera = null) {
       ctx.save();
 
       // 1. TOP-LEFT: Health, Armour, Money
@@ -309,7 +309,95 @@ export function createHud() {
         }
       }
 
-      // 3. TOP-CENTRE: Mission Banner slot stays available
+      // 2.5 TOP-RIGHT: OBJECTIVE PANEL (Below Wanted Stars)
+      const objMissions = missions || window.__game?.missions;
+      if (objMissions && objMissions.currentMission && objMissions.state !== 'inactive') {
+        const objX = 1280 - 32 - 250;
+        const objY = 56;
+        const objW = 250;
+        const objH = 82;
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(10, 14, 22, 0.88)';
+        ctx.beginPath();
+        ctx.roundRect(objX, objY, objW, objH, 6);
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+
+        // Tag and reward
+        ctx.font = '900 10px monospace';
+        ctx.fillStyle = '#00f0ff';
+        ctx.fillText('OBJECTIVE', objX + 12, objY + 8);
+
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#78f0a0';
+        ctx.fillText(`REWARD: $${objMissions.reward}`, objX + objW - 12, objY + 8);
+
+        // Mission Name
+        ctx.textAlign = 'left';
+        ctx.font = '900 13px "Arial Black", sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(objMissions.name, objX + 12, objY + 23);
+
+        // Current Objective Text
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillStyle = '#ffd166';
+        ctx.fillText(objMissions.objectiveText, objX + 12, objY + 43);
+
+        // Progress
+        ctx.font = 'bold 11px monospace';
+        ctx.fillStyle = '#20dfb8';
+        ctx.fillText(`▸ ${objMissions.progress}`, objX + 12, objY + 62);
+
+        ctx.restore();
+      }
+
+      // 3. TOP-CENTRE: Mission Banner slot
+      if (objMissions && objMissions.bannerTimer > 0) {
+        const bW = 540;
+        const bH = 86;
+        const bX = (1280 - bW) / 2;
+        const bY = 140;
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(10, 14, 24, 0.92)';
+        ctx.beginPath();
+        ctx.roundRect(bX, bY, bW, bH, 10);
+        ctx.fill();
+
+        ctx.strokeStyle = '#ffd166';
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = '#ffd166';
+        ctx.shadowBlur = 18;
+        ctx.stroke();
+        ctx.shadowColor = 'transparent';
+
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '900 32px "Arial Black", sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 10;
+        ctx.fillText(objMissions.bannerText || 'MISSION COMPLETE', 640, bY + 30);
+        ctx.shadowColor = 'transparent';
+
+        ctx.font = 'bold 16px monospace';
+        ctx.fillStyle = '#78f0a0';
+        ctx.fillText(objMissions.bannerSubtext || '+$500', 640, bY + 62);
+        ctx.restore();
+      }
+
+      // Draw screen-edge waypoint guidance arrow if available
+      if (objMissions && objMissions.drawScreen) {
+        const activeCam = camera || window.__game?.camera;
+        objMissions.drawScreen(ctx, activeCam, time);
+      }
 
       // 4. BOTTOM-CENTRE: Compact Weapon Panel with Ammo & Reload Indicator
       const bcX = 640;
@@ -425,7 +513,7 @@ export function createHud() {
       ctx.restore();
 
       // 7. BOTTOM-LEFT: Clean Circular Minimap (210 px) with Police Blips & Vision Cone
-      minimap.draw(ctx, 130, 590, trafficCars, police);
+      minimap.draw(ctx, 130, 590, trafficCars, police, missions);
 
       // 8. Red Damage Vignette Flash when hit
       if (player.damageVignette > 0) {

@@ -137,6 +137,7 @@ export function createCar(x = 0, y = 0, angle = 0, type = 'sedan', color = null)
     indicator: null, // 'left' | 'right' | null
     indicatorTimer: 0,
     sirenTimer: 0,
+    fireCooldown: 1.0,
 
     // Particles & marks
     exhaustTimer: 0,

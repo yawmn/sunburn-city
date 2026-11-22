@@ -6,7 +6,7 @@ export function createMinimap(world, player) {
   const RADIUS = DIAMETER / 2; // 105 px
 
   return {
-    draw(ctx, cx = 130, cy = 590, trafficCars = [], police = null) {
+    draw(ctx, cx = 130, cy = 590, trafficCars = [], police = null, missions = null) {
       if (!world || !player) return;
 
       ctx.save();
@@ -162,14 +162,18 @@ export function createMinimap(world, player) {
       }
 
       // 6.6 Mission blip slot stays
-      if (world.missionBlip) {
+      const missionWp = (missions && missions.waypoint) || world.missionBlip;
+      if (missionWp && missionWp.x != null && missionWp.y != null) {
         ctx.fillStyle = '#ffd166';
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.arc(world.missionBlip.x, world.missionBlip.y, 28, 0, Math.PI * 2);
+        ctx.arc(missionWp.x, missionWp.y, 30, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
+
+        ctx.fillStyle = '#ff007f';
+        ctx.fillRect(missionWp.x - 9, missionWp.y - 9, 18, 18);
       }
 
       // End of world transformed drawing
@@ -253,6 +257,35 @@ export function createMinimap(world, player) {
       }
 
       ctx.restore();
+
+      // Clamped perimeter arrow if waypoint is outside circular radar view
+      if (missionWp && missionWp.x != null && missionWp.y != null) {
+        const dx = (missionWp.x - player.x) * scale;
+        const dy = (missionWp.y - player.y) * scale;
+        const dist = Math.hypot(dx, dy);
+        if (dist > RADIUS - 10) {
+          const angle = Math.atan2(dy, dx);
+          const rimDist = RADIUS - 8;
+          const blipX = cx + Math.cos(angle) * rimDist;
+          const blipY = cy + Math.sin(angle) * rimDist;
+
+          ctx.save();
+          ctx.translate(blipX, blipY);
+          ctx.rotate(angle);
+          ctx.fillStyle = '#ffd166';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(9, 0);
+          ctx.lineTo(-6, -6);
+          ctx.lineTo(-2, 0);
+          ctx.lineTo(-6, 6);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
 
       ctx.restore();
     },

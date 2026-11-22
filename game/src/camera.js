@@ -6,6 +6,8 @@ export function createCamera(viewW = 1280, viewH = 720, worldW = 4400, worldH = 
     y: worldH / 2,
     viewW,
     viewH,
+    w: viewW,
+    h: viewH,
     worldW,
     worldH,
     shake: 0,

@@ -305,8 +305,10 @@ export function createCombatSystem() {
         // Convert screen mouse coordinates to world coordinates
         const mouseX = input.mousePos.x;
         const mouseY = input.mousePos.y;
-        const worldMouseX = camera.x - (camera.w / 2) / camera.zoom + mouseX / camera.zoom;
-        const worldMouseY = camera.y - (camera.h / 2) / camera.zoom + mouseY / camera.zoom;
+        const camW = camera.viewW || camera.w || 1280;
+        const camH = camera.viewH || camera.h || 720;
+        const worldMouseX = camera.x - (camW / 2) / camera.zoom + mouseX / camera.zoom;
+        const worldMouseY = camera.y - (camH / 2) / camera.zoom + mouseY / camera.zoom;
 
         const originX = player.inCar ? player.inCar.x : player.x;
         const originY = player.inCar ? player.inCar.y : player.y;

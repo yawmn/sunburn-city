@@ -229,6 +229,7 @@ export function createPoliceSystem(world) {
     cruiser.sirenTimer = Math.random() * 10;
     cruiser.speed = 280;
     cruiser.aiState = 'pursuing';
+    cruiser.fireCooldown = 1.0;
     cruisers.push(cruiser);
     return cruiser;
   }
@@ -252,11 +253,13 @@ export function createPoliceSystem(world) {
     c1.hasLightbar = true;
     c1.speed = 0;
     c1.isRoadblock = true;
+    c1.fireCooldown = 1.0;
 
     const c2 = createCar(targetX - perpX * 22, targetY - perpY * 22, playerCar.angle - Math.PI * 0.75, 'police', '#ffffff');
     c2.hasLightbar = true;
     c2.speed = 0;
     c2.isRoadblock = true;
+    c2.fireCooldown = 1.0;
 
     cruisers.push(c1);
     cruisers.push(c2);
@@ -312,8 +315,14 @@ export function createPoliceSystem(world) {
     get overlayType() {
       return overlayType;
     },
+    set overlayType(val) {
+      overlayType = val;
+    },
     get overlayTimer() {
       return overlayTimer;
+    },
+    set overlayTimer(val) {
+      overlayTimer = val;
     },
     get overlayMessage() {
       return overlayMessage;
@@ -439,6 +448,11 @@ export function createPoliceSystem(world) {
         if (c.isWreck) continue;
 
         c.sirenTimer += dt * 10;
+        if (c.fireCooldown === undefined) {
+          c.fireCooldown = 1.0;
+        } else if (c.fireCooldown > 0) {
+          c.fireCooldown -= dt;
+        }
 
         // Skip AI for parked roadblock cruisers
         if (c.isRoadblock) {
@@ -473,10 +487,11 @@ export function createPoliceSystem(world) {
           }
 
           // At 3+ stars: officer inside shoots pistol from cruiser
-          if (wanted >= 3 && distToPlayer < 350 && Math.random() < 0.02 && combat) {
+          if (wanted >= 3 && distToPlayer < 350 && c.fireCooldown <= 0 && combat) {
+            c.fireCooldown = 1.0;
             const shotAngle = Math.atan2(player.y - c.y, player.x - c.x);
             // Bullet fired towards player
-            player.takeDamage(12);
+            player.takeDamage(6);
           }
         } else {
           // Player is on foot

@@ -26,6 +26,10 @@ export function createRng(initialSeed = 1) {
     return Math.floor(range(min, max + 1));
   }
 
+  function intRange(min, max) {
+    return Math.floor(range(min, max + 1));
+  }
+
   function pick(arr) {
     if (!arr || arr.length === 0) return null;
     return arr[Math.floor(rand() * arr.length)];
@@ -43,6 +47,7 @@ export function createRng(initialSeed = 1) {
     rand,
     range,
     rangeInt,
+    intRange,
     pick,
     chance,
     setSeed,
@@ -55,6 +60,7 @@ const defaultRng = createRng(1);
 export const rand = defaultRng.rand;
 export const range = defaultRng.range;
 export const rangeInt = defaultRng.rangeInt;
+export const intRange = defaultRng.intRange;
 export const pick = defaultRng.pick;
 export const chance = defaultRng.chance;
 export const setSeed = defaultRng.setSeed;

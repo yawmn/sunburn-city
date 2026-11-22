@@ -19,6 +19,8 @@ export function createPlayer(x = 3580, y = 1400) {
     maxArmour: 100,
     money: 100,
     weapon: 'FISTS',
+    lastWeapon: 'FISTS',
+    weaponSwitchTimer: 0,
     ammo: '∞',
     inCar: null,
     isWasted: false,
@@ -117,6 +119,14 @@ export function createPlayer(x = 3580, y = 1400) {
     },
 
     update(dt, input, solids, worldW, worldH) {
+      if (this.weapon !== this.lastWeapon) {
+        this.weaponSwitchTimer = 0.15; // Fast 150ms weapon ready transition
+        this.lastWeapon = this.weapon;
+      }
+      if (this.weaponSwitchTimer > 0) {
+        this.weaponSwitchTimer = Math.max(0, this.weaponSwitchTimer - dt);
+      }
+
       if (this.damageVignette > 0) {
         this.damageVignette = Math.max(0, this.damageVignette - dt * 2.2);
       }

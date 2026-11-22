@@ -26,6 +26,10 @@ always builds the same city.
   and shoot, and roadblocks at four stars. Lose them out of sight and the stars cool down.
 - **Combat** — fists, a pistol and an SMG with tracers, muzzle flash, casings, impacts and
   exploding cars, plus drive-by fire from the driver's window.
+- **Missions** — four story jobs (SUNSET VICE, HEAT ON OCEAN DRIVE, SYNDICATE TAKEDOWN,
+  SUNBURN ESCAPE) with briefings, ordered objectives, pulsing world waypoints, a screen-edge
+  guidance arrow, an objective panel, cash rewards and a completion banner. Beat one and the
+  next starts; the city remembers your money.
 - **The city keeps living** — day-to-night light, a minimap with traffic and police blips,
   health, armour, money, weapon and radio HUD.
 

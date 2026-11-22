@@ -12,6 +12,7 @@ export function stageShot(name, game) {
     game.camera.x = 2800;
     game.camera.y = 1400;
     game.camera.target = null;
+    game.camera.zoom = 0.7; // wide establishing frame: more city, beach and ocean in view
 
     const totalSteps = Math.round(12 / STEP); // 720 steps
     for (let i = 0; i < totalSteps; i++) {
@@ -138,6 +139,8 @@ export function stageShot(name, game) {
         p.vy = (k % 2 === 0) ? 45 : -45;
       }
     }
+    // The objective panel belongs in the free-play frame too: start mission 1 if it is idle.
+    if (game.missions && game.missions.state === 'inactive') game.missions.start(0);
   } else if (name === 'chase') {
     // 3. Chase scene:
     // "player driving a red sports car at speed on the beachfront boulevard, wanted 4 stars,
@@ -186,6 +189,16 @@ export function stageShot(name, game) {
     game.traffic.cars = [taxiAhead];
     game.parkedCars = [playerCar];
 
+    // Lock player health and armour during the staging loop so scripted damage cannot kill
+    const lockedHealth = 100;
+    const lockedArmour = 100;
+    game.player.health = lockedHealth;
+    game.player.armour = lockedArmour;
+    game.player.isWasted = false;
+    game.player.isBusted = false;
+    const originalTakeDamage = game.player.takeDamage;
+    game.player.takeDamage = function() {};
+
     // Advance real simulation ~4.0 s (240 steps)
     const chaseSteps = Math.round(4.0 / STEP); // 4.0 s
     for (let i = 0; i < chaseSteps; i++) {
@@ -196,6 +209,11 @@ export function stageShot(name, game) {
         sprint: false,
         space: (i % 60 > 45), // Occasional drift pulse for skids
       };
+
+      game.player.health = lockedHealth;
+      game.player.armour = lockedArmour;
+      game.player.isWasted = false;
+      game.player.isBusted = false;
 
       game.player.update(STEP, simulatedDrive, game.world.solids, game.world.w, game.world.h);
       game.camera.update(STEP);
@@ -215,18 +233,56 @@ export function stageShot(name, game) {
       game.time += STEP;
     }
 
-    // Ensure cruisers are positioned in close pursuit behind player in camera view
-    policeCar1.y = playerCar.y - 120;
-    policeCar1.x = 3508;
-    policeCar1.speed = 285;
-    policeCar1.hasLightbar = true;
+    // Restore player takeDamage and ensure health/armour are locked and no overlay is active
+    game.player.takeDamage = originalTakeDamage;
+    game.player.health = lockedHealth;
+    game.player.armour = lockedArmour;
+    game.player.isWasted = false;
+    game.player.isBusted = false;
+    game.player.damageVignette = 0;
 
-    policeCar2.y = playerCar.y - 230;
-    policeCar2.x = 3536;
-    policeCar2.speed = 285;
+    // After the loop set game.police.overlayType to null and game.police.overlayTimer to 0
+    game.police.overlayType = null;
+    game.police.overlayTimer = 0;
+
+    // The 4 s of simulation can end in a collision, which left the frame at 3 MPH. Put the car back
+    // on a clear stretch of the boulevard at pursuit speed, so the frame reads as a real mid-chase.
+    playerCar.x = 3536;
+    playerCar.y = 1200;
+    playerCar.angle = Math.PI / 2;
+    playerCar.speed = 240;
+    playerCar.vx = 0;
+    playerCar.vy = 240;
+    playerCar.damage = 0.04;
+    const leadCar = game.traffic.cars[0];
+    if (leadCar) {
+      leadCar.y = playerCar.y + 760;
+      leadCar.speed = 130;
+      leadCar.vx = 0;
+      leadCar.vy = 130;
+    }
+
+    // Place the two cruisers 90 to 160 world units behind the player car in the same lane, light bars on
+    policeCar1.x = playerCar.x;
+    policeCar1.y = playerCar.y - 110;
+    policeCar1.angle = playerCar.angle;
+    policeCar1.speed = 242;
+    policeCar1.vx = 0;
+    policeCar1.vy = 242;
+    policeCar1.hasLightbar = true;
+    policeCar1.fireCooldown = 1.0;
+
+    policeCar2.x = playerCar.x;
+    policeCar2.y = playerCar.y - 175;
+    policeCar2.angle = playerCar.angle;
+    policeCar2.speed = 242;
+    policeCar2.vx = 0;
+    policeCar2.vy = 242;
     policeCar2.hasLightbar = true;
+    policeCar2.fireCooldown = 1.0;
 
     game.police.cruisers = [policeCar1, policeCar2];
+    game.police.wanted = 4;
 
     // Ensure tyre skid marks behind player car and cruisers
     for (let sy = playerCar.y - 300; sy < playerCar.y - 20; sy += 12) {
@@ -242,10 +298,137 @@ export function stageShot(name, game) {
       });
     }
 
-    // Camera centered on player
+    // Keep the camera target on the player car with zoom 0.88
+    game.camera.setTarget(game.player);
+    game.camera.zoom = 0.8;
     game.camera.x = playerCar.x;
-    game.camera.y = playerCar.y;
+    game.camera.y = playerCar.y - 60; // bias the frame so the pursuers stay in view
     game.camera.clamp();
+  } else if (name === 'mission') {
+    // 4. Mission scene:
+    // Player on foot near a mission waypoint with objective panel visible,
+    // police cruiser with light bar on in frame, 3+ pedestrians and 2+ moving cars visible,
+    // camera centred on player at zoom 1.0.
+    game.screen = 'playing';
+
+    if (game.missions) {
+      game.missions.start(0);
+    }
+
+    if (game.player.inCar) {
+      game.player.exitCar();
+    }
+
+    const playerX = 3580;
+    const playerY = 1555;
+    game.player.x = playerX;
+    game.player.y = playerY;
+    game.player.vx = 0;
+    game.player.vy = 0;
+    game.player.speed = 0;
+    game.player.facingAngle = -Math.PI * 0.75;
+    game.player.money = 250;
+
+    game.camera.setTarget(game.player);
+    game.camera.zoom = 1.0;
+    game.camera.x = playerX;
+    game.camera.y = playerY;
+    game.camera.clamp();
+
+    // Police cruiser with light bar on in frame on the boulevard
+    const policeCruiser = createCar(3536, 1510, Math.PI / 2, 'police', '#ffffff');
+    policeCruiser.hasLightbar = true;
+    policeCruiser.sirenTimer = 2.0;
+    policeCruiser.speed = 40;
+    policeCruiser.vx = 0;
+    policeCruiser.vy = 40;
+    game.police.cruisers = [policeCruiser];
+
+    // Ensure 2 or more moving cars visible in frame on boulevard
+    const movingCar1 = createCar(3536, 1400, Math.PI / 2, 'sedan', '#457b9d');
+    movingCar1.speed = 135;
+    movingCar1.vx = 0;
+    movingCar1.vy = 135;
+
+    const movingCar2 = createCar(3504, 1690, -Math.PI / 2, 'sports', '#e63946');
+    movingCar2.speed = 145;
+    movingCar2.vx = 0;
+    movingCar2.vy = -145;
+
+    game.traffic.cars = [movingCar1, movingCar2];
+
+    // Ensure 3 or more pedestrians visible in frame along the sidewalk
+    const p1 = game.pedestrians.spawnFleeing(3580, 1480, 3560, 1480);
+    p1.state = 'walking'; p1.vx = 0; p1.vy = 45; p1.facingAngle = Math.PI / 2;
+    const p2 = game.pedestrians.spawnFleeing(3582, 1520, 3560, 1520);
+    p2.state = 'walking'; p2.vx = 0; p2.vy = -45; p2.facingAngle = -Math.PI / 2;
+    const p3 = game.pedestrians.spawnFleeing(3584, 1620, 3560, 1620);
+    p3.state = 'walking'; p3.vx = 0; p3.vy = 45; p3.facingAngle = Math.PI / 2;
+    const p4 = game.pedestrians.spawnFleeing(3578, 1660, 3560, 1660);
+    p4.state = 'walking'; p4.vx = 0; p4.vy = -45; p4.facingAngle = -Math.PI / 2;
+
+    // Lock health & armour during simulation advance
+    const lockedHealth = 100;
+    const lockedArmour = 100;
+    game.player.health = lockedHealth;
+    game.player.armour = lockedArmour;
+    game.player.isWasted = false;
+    game.player.isBusted = false;
+    const originalTakeDamage = game.player.takeDamage;
+    game.player.takeDamage = function() {};
+
+    const missionSteps = Math.round(2.0 / STEP); // 2.0 s
+    for (let i = 0; i < missionSteps; i++) {
+      const simInput = {
+        axes() { return { x: 0, y: 0 }; },
+        sprint: false,
+        interact: false,
+      };
+
+      game.player.health = lockedHealth;
+      game.player.armour = lockedArmour;
+      game.player.isWasted = false;
+      game.player.isBusted = false;
+
+      policeCruiser.sirenTimer += STEP * 8;
+
+      game.player.update(STEP, simInput, game.world.solids, game.world.w, game.world.h);
+      game.traffic.update(STEP, null, game.world.solids);
+      game.pedestrians.update(STEP, game.traffic.cars, game.player, game.world.solids);
+      game.camera.update(STEP);
+      game.time += STEP;
+    }
+
+    // Restore player state
+    game.player.takeDamage = originalTakeDamage;
+    game.player.health = lockedHealth;
+    game.player.armour = lockedArmour;
+    game.player.isWasted = false;
+    game.player.isBusted = false;
+    game.player.damageVignette = 0;
+
+    game.player.x = playerX;
+    game.player.y = playerY;
+    game.player.vx = 0;
+    game.player.vy = 0;
+    game.player.speed = 0;
+    game.player.facingAngle = -Math.PI * 0.75;
+
+    game.police.overlayType = null;
+    game.police.overlayTimer = 0;
+
+    // Ensure camera is precisely centered on player at zoom 1.0
+    game.camera.setTarget(game.player);
+    game.camera.zoom = 1.0;
+    game.camera.x = playerX;
+    game.camera.y = playerY;
+    game.camera.clamp();
+
+    // Ensure police cruiser is in frame with light bar on
+    policeCruiser.x = 3536;
+    policeCruiser.y = 1510;
+    policeCruiser.hasLightbar = true;
+    game.police.cruisers = [policeCruiser];
   } else {
     // Fallback / 'end' / 'mission' shot
     game.screen = 'playing';

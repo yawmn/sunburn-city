@@ -546,11 +546,22 @@ export function createPedestrians(world, seed = 77) {
           }
         }
 
-        // Player on foot attack/panic
+        // Player on foot attack/panic and flinching when player aims with a weapon
         if (player && !player.inCar) {
           const pDist = Math.hypot(p.x - player.x, p.y - player.y);
           if (pDist < 25 && player.speed > 180 && p.state !== 'knocked_down') {
             p.triggerPanic(player.x, player.y);
+          }
+
+          // Flinch when player aims at ped or is close with a firearm
+          const isArmed = player.weapon && player.weapon !== 'FISTS';
+          if (isArmed && pDist < 110 && p.state !== 'knocked_down' && p.state !== 'panicking') {
+            const toPedAngle = Math.atan2(p.y - player.y, p.x - player.x);
+            let aimDiff = Math.abs(toPedAngle - (player.aimAngle !== undefined ? player.aimAngle : player.facingAngle));
+            while (aimDiff > Math.PI) aimDiff = Math.abs(aimDiff - Math.PI * 2);
+            if (aimDiff < 0.6 || pDist < 45) {
+              p.triggerPanic(player.x, player.y);
+            }
           }
         }
       }

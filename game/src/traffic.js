@@ -273,9 +273,12 @@ export function createTraffic(world, seed = 42, pedestrianManager = null) {
         }
 
         if (carAheadDist < 45) {
-          // Brake immediately
+          // Brake immediately and blow a longer horn if cut off by player
           desiredSpeed = 0;
           car.isBraking = true;
+          if (playerCar && Math.hypot(car.x - playerCar.x, car.y - playerCar.y) < 75) {
+            car.honkTimer = Math.max(car.honkTimer || 0, 2.8);
+          }
         } else if (carAheadDist < 85) {
           // Slow down
           desiredSpeed = Math.min(desiredSpeed, (carAheadDist - 40) * 2.5);
@@ -433,8 +436,8 @@ export function createTraffic(world, seed = 42, pedestrianManager = null) {
         if (playerCar && playerCar !== c1) {
           const impact = playerCar.collideCar(c1);
           if (impact > 30) {
-            // Player rammed traffic car!
-            c1.honkTimer = 2.0;
+            // Player rammed traffic car! Longer sustained horn blast
+            c1.honkTimer = 2.8;
             if (c1.ai) {
               c1.ai.state = 'stopped';
             }

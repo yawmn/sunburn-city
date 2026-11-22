@@ -15,6 +15,7 @@ import { createTraffic } from './traffic.js';
 import { createPedestrians } from './pedestrians.js';
 import { createCombatSystem } from './combat.js';
 import { createPoliceSystem } from './police.js';
+import { createMissions } from './missions.js';
 import { stageShot } from './shots.js';
 
 // Global error capture initialization
@@ -61,6 +62,7 @@ function boot() {
 
   const combat = createCombatSystem();
   const police = createPoliceSystem(world);
+  const missions = createMissions(world, player, police);
 
   // Parked sports car beside player on beachfront sidewalk kerb
   const parkedCar = createCar(3546, 1200, Math.PI / 2, 'sports', '#e63946');
@@ -86,6 +88,7 @@ function boot() {
     parkedCars,
     combat,
     police,
+    missions,
 
     update(dt) {
       this.time += dt;
@@ -105,6 +108,9 @@ function boot() {
         if (this.input.takePressed('enter') || this.input.takePressed('space')) {
           this.screen = 'playing';
           this.camera.setTarget(this.player);
+          if (this.missions && this.missions.state === 'inactive') {
+            this.missions.start(0);
+          }
         }
       } else if (this.screen === 'playing') {
         // Pause check
@@ -160,6 +166,11 @@ function boot() {
 
         // Update police pursuit AI & wanted decay
         this.police.update(dt, this.player, this.world, this.traffic, this.combat, this.camera);
+
+        // Update story missions
+        if (this.missions) {
+          this.missions.update(dt);
+        }
       } else if (this.screen === 'paused') {
         // Resume check
         if (this.input.takePressed('pause')) {
@@ -185,19 +196,22 @@ function boot() {
         ...(this.police ? this.police.officers : []),
         ...(this.police ? this.police.cones : []),
       ];
-      this.renderer.render(this.player, this.camera, entities, this.time, this.combat, this.police);
+      this.renderer.render(this.player, this.camera, entities, this.time, this.combat, this.police, this.missions);
 
       // 2. Draw Screen Overlays
       if (this.screen === 'title') {
         this.hud.drawTitle(ctx, this.time);
       } else if (this.screen === 'playing') {
-        this.hud.drawPlaying(ctx, this.player, this.world, this.minimap, '18:42', this.traffic.cars, this.police, this.combat, this.time);
+        this.hud.drawPlaying(ctx, this.player, this.world, this.minimap, '18:42', this.traffic.cars, this.police, this.combat, this.time, this.missions, this.camera);
       } else if (this.screen === 'paused') {
-        this.hud.drawPlaying(ctx, this.player, this.world, this.minimap, '18:42', this.traffic.cars, this.police, this.combat, this.time);
+        this.hud.drawPlaying(ctx, this.player, this.world, this.minimap, '18:42', this.traffic.cars, this.police, this.combat, this.time, this.missions, this.camera);
         this.hud.drawPaused(ctx);
       }
     },
   };
+
+  window.__game = game;
+  window.game = game;
 
   // If a screenshot shot is requested, stage it
   if (shot) {
