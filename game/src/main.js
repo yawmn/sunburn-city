@@ -1,134 +1,237 @@
-// Boot and the one loop: input is read every frame, the world advances in fixed 1/60 s steps
-// (several in a slow frame, none in a fast one), and the renderer paints what is there. The game
-// moves between four screens: title, play, paused and game over.
-//
-// ?seed=N fixes the falling pattern. ?shot=start|play|end (with &seed=N) stages that scene
-// instead of running the loop, paints it twice and sets window.__shotReady for a screenshot.
-import { BEST_KEY, LIVES, STEP } from './config.js';
-import { createRandom } from './random.js';
-import { createWorld, EVENT_HIT, EVENT_OVER } from './world.js';
-import { ACTION_CONFIRM, ACTION_PAUSE, createInput } from './input.js';
-import { createRenderer, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
+// SUNBURN CITY - Main Entry Point
+// Sets up 1280x720 canvas, PRNG seed, input, city world, player, camera, minimap, HUD,
+// fixed-timestep game loop (1/60s, max 4 catch-up), screen state management, and error capture.
+
+import { setSeed } from './rng.js';
+import { createInput } from './input.js';
+import { createCity } from './city.js';
+import { createPlayer } from './player.js';
+import { createCamera } from './camera.js';
+import { createMinimap } from './minimap.js';
+import { createHud } from './hud.js';
+import { createRenderer } from './render.js';
+import { createCar } from './vehicle.js';
+import { createTraffic } from './traffic.js';
+import { createPedestrians } from './pedestrians.js';
+import { createCombatSystem } from './combat.js';
+import { createPoliceSystem } from './police.js';
 import { stageShot } from './shots.js';
 
-/** The longest frame the loop catches up on; a longer stall (a hidden tab) is dropped, not replayed. */
-const MAX_FRAME = 0.25;
-
-const params = new URLSearchParams(window.location.search);
-const shot = params.get('shot');
-const seedParam = Number.parseInt(params.get('seed') ?? '', 10);
-const seed = Number.isInteger(seedParam) ? seedParam : Math.floor(Math.random() * 4294967296);
-
-const canvas = document.getElementById('game');
-const status = document.getElementById('status');
-const world = createWorld(createRandom(seed));
-const renderer = createRenderer(canvas);
-
-function readBest() {
-  try {
-    return Number.parseInt(window.localStorage.getItem(BEST_KEY) ?? '0', 10) || 0;
-  } catch {
-    return 0;
-  }
+// Global error capture initialization
+if (!window.__errors) window.__errors = [];
+function logError(err) {
+  const msg = (err && (err.message || err.reason?.message || String(err))) || 'Unknown error';
+  window.__errors.push(msg);
+  const statusEl = document.getElementById('status');
+  if (statusEl) statusEl.textContent = msg;
+  document.body.dataset.errors = window.__errors.join(' | ');
 }
+window.addEventListener('error', (e) => logError(e.error || e.message));
+window.addEventListener('unhandledrejection', (e) => logError(e.reason));
+document.body.dataset.errors = '';
 
-function saveBest(value) {
-  try {
-    window.localStorage.setItem(BEST_KEY, String(value));
-  } catch {
-    // Storage can be off (private windows): the best score then lasts this visit only.
-  }
-}
+function boot() {
+  const canvas = document.getElementById('game');
+  if (!canvas) throw new Error('Canvas #game element not found');
 
-function runShot(name) {
-  const scene = stageShot(name, world);
-  let painted = 0;
-  function paint() {
-    renderer.draw(world.state, scene.screen, scene.best);
-    painted += 1;
-    if (painted < 2) requestAnimationFrame(paint);
-    else window.__shotReady = true;
-  }
-  requestAnimationFrame(paint);
-}
+  canvas.width = 1280;
+  canvas.height = 720;
+  const ctx = canvas.getContext('2d', { alpha: false });
 
-function runGame() {
+  // Read URL query parameters
+  const params = new URLSearchParams(window.location.search);
+  const seedParam = parseInt(params.get('seed') || '1', 10);
+  const seed = Number.isFinite(seedParam) ? seedParam : 1;
+  const shot = params.get('shot');
+
+  // Seed the PRNG
+  setSeed(seed);
+
+  // Initialize game systems
   const input = createInput(canvas);
-  let screen = SCREEN_TITLE;
-  let best = readBest();
-  let accumulator = 0;
-  let last = performance.now();
+  const world = createCity(seed);
+  // Default player position: Ocean Drive beachfront promenade
+  const player = createPlayer(3580, 1200);
+  const camera = createCamera(1280, 720, world.w, world.h);
+  camera.setTarget(player);
 
-  // Screen readers (and anyone watching the page's text) hear the screen changes and each hit.
-  function announce(message) {
-    status.textContent = message;
-  }
+  const pedestrians = createPedestrians(world, seed);
+  const traffic = createTraffic(world, seed, pedestrians);
+  pedestrians.update(0.01, traffic.cars, player, world.solids);
 
-  function startGame() {
-    world.reset();
-    accumulator = 0;
-    screen = SCREEN_PLAY;
-    announce(`Playing. ${LIVES} lives.`);
-  }
+  const combat = createCombatSystem();
+  const police = createPoliceSystem(world);
 
-  function endGame() {
-    screen = SCREEN_OVER;
-    if (world.state.score > best) {
-      best = world.state.score;
-      saveBest(best);
-    }
-    announce(`Game over. Score ${world.state.score}. Best ${best}.`);
-  }
+  // Parked sports car beside player on beachfront sidewalk kerb
+  const parkedCar = createCar(3546, 1200, Math.PI / 2, 'sports', '#e63946');
+  const parkedCars = [parkedCar];
 
-  function handleActions() {
-    const actions = input.takeActions();
-    if (actions & ACTION_CONFIRM && (screen === SCREEN_TITLE || screen === SCREEN_OVER)) startGame();
-    else if (actions & ACTION_PAUSE && screen === SCREEN_PLAY) {
-      screen = SCREEN_PAUSED;
-      announce('Paused.');
-    } else if (actions & (ACTION_PAUSE | ACTION_CONFIRM) && screen === SCREEN_PAUSED) {
-      screen = SCREEN_PLAY;
-      announce('Playing.');
-    }
-  }
+  const minimap = createMinimap(world, player);
+  const hud = createHud();
+  const renderer = createRenderer(canvas, ctx, world);
 
-  function step() {
-    if (screen === SCREEN_TITLE) {
-      world.step(STEP, 0, true);
-      return;
-    }
-    const events = world.step(STEP, input.direction(), false);
-    if (events & EVENT_OVER) endGame();
-    else if (events & EVENT_HIT) announce(world.state.lives === 1 ? 'Hit. 1 life left.' : `Hit. ${world.state.lives} lives left.`);
-  }
+  const game = {
+    screen: 'title', // 'title', 'playing', 'paused'
+    time: 0,
+    seed,
+    world,
+    player,
+    camera,
+    minimap,
+    hud,
+    renderer,
+    input,
+    traffic,
+    pedestrians,
+    parkedCars,
+    combat,
+    police,
 
-  function frame(now) {
-    requestAnimationFrame(frame);
-    accumulator += Math.min((now - last) / 1000, MAX_FRAME);
-    last = now;
-    handleActions();
-    if (screen === SCREEN_TITLE || screen === SCREEN_PLAY) {
-      while (accumulator >= STEP && (screen === SCREEN_TITLE || screen === SCREEN_PLAY)) {
-        step();
-        accumulator -= STEP;
+    update(dt) {
+      this.time += dt;
+
+      if (this.screen === 'title') {
+        // Live city simulation at dusk: slowly pan camera along boulevard
+        this.camera.x += 12 * dt;
+        if (this.camera.x > 3300) this.camera.x = 2400;
+        this.camera.y = 1400 + Math.sin(this.time * 0.4) * 80;
+        this.camera.clamp();
+
+        // Update live traffic and pedestrians
+        this.traffic.update(dt, null, this.world.solids);
+        this.pedestrians.update(dt, this.traffic.cars, null, this.world.solids);
+
+        // Check for start
+        if (this.input.takePressed('enter') || this.input.takePressed('space')) {
+          this.screen = 'playing';
+          this.camera.setTarget(this.player);
+        }
+      } else if (this.screen === 'playing') {
+        // Pause check
+        if (this.input.takePressed('pause')) {
+          this.screen = 'paused';
+          return;
+        }
+
+        // Quit to title check
+        if (this.input.takePressed('escape')) {
+          this.screen = 'title';
+          this.camera.target = null;
+          return;
+        }
+
+        // Vehicle Entry / Exit on E key
+        if (this.input.takePressed('interact')) {
+          if (this.player.inCar) {
+            this.player.exitCar(this.world.solids);
+          } else {
+            // Find nearest traffic car or parked car
+            const car = this.traffic.nearestCar(this.player, 55) ||
+              this.parkedCars.find(c => !c.driver && Math.hypot(c.x - this.player.x, c.y - this.player.y) < 55);
+
+            if (car) {
+              if (this.traffic.cars.includes(car)) {
+                this.traffic.hijack(car);
+              }
+              this.player.enterCar(car);
+              car.onImpact = (spd) => {
+                this.camera.screenShake(Math.min(24, spd * 0.22));
+              };
+            }
+          }
+        }
+
+        // Update player & camera
+        this.player.update(dt, this.input, this.world.solids, this.world.w, this.world.h);
+        this.camera.update(dt);
+
+        // Update traffic AI
+        this.traffic.update(dt, this.player.inCar, this.world.solids);
+
+        // Update pedestrians (panic, run-over, chat, walk)
+        const activeCars = [...this.traffic.cars, ...this.parkedCars];
+        if (this.player.inCar && !activeCars.includes(this.player.inCar)) {
+          activeCars.push(this.player.inCar);
+        }
+        this.pedestrians.update(dt, activeCars, this.player, this.world.solids);
+
+        // Update combat (weapons, firing, tracers, bullet damage, explosions)
+        this.combat.update(dt, this.player, this.input, this.camera, this.world, this.traffic, this.pedestrians, this.police);
+
+        // Update police pursuit AI & wanted decay
+        this.police.update(dt, this.player, this.world, this.traffic, this.combat, this.camera);
+      } else if (this.screen === 'paused') {
+        // Resume check
+        if (this.input.takePressed('pause')) {
+          this.screen = 'playing';
+          return;
+        }
+        // Quit to title
+        if (this.input.takePressed('escape')) {
+          this.screen = 'title';
+          this.camera.target = null;
+          return;
+        }
       }
-    } else {
-      accumulator = 0;
-    }
-    renderer.draw(world.state, screen, best);
+    },
+
+    render() {
+      // 1. Collect entities for depth-sorted rendering
+      const entities = [
+        ...this.traffic.cars,
+        ...this.parkedCars,
+        ...this.pedestrians.list,
+        ...(this.police ? this.police.cruisers : []),
+        ...(this.police ? this.police.officers : []),
+        ...(this.police ? this.police.cones : []),
+      ];
+      this.renderer.render(this.player, this.camera, entities, this.time, this.combat, this.police);
+
+      // 2. Draw Screen Overlays
+      if (this.screen === 'title') {
+        this.hud.drawTitle(ctx, this.time);
+      } else if (this.screen === 'playing') {
+        this.hud.drawPlaying(ctx, this.player, this.world, this.minimap, '18:42', this.traffic.cars, this.police, this.combat, this.time);
+      } else if (this.screen === 'paused') {
+        this.hud.drawPlaying(ctx, this.player, this.world, this.minimap, '18:42', this.traffic.cars, this.police, this.combat, this.time);
+        this.hud.drawPaused(ctx);
+      }
+    },
+  };
+
+  // If a screenshot shot is requested, stage it
+  if (shot) {
+    stageShot(shot, game);
   }
 
-  // Leaving the tab pauses a running game rather than letting blocks fall unseen.
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && screen === SCREEN_PLAY) {
-      screen = SCREEN_PAUSED;
-      announce('Paused.');
-    }
-  });
+  // Fixed-timestep game loop (1/60s step, max 4 catch-up updates per frame)
+  const STEP = 1 / 60;
+  let lastTime = performance.now();
+  let accumulator = 0;
 
-  announce('Block Dodger. Press Space or click to start.');
-  requestAnimationFrame(frame);
+  function loop(currentTime) {
+    let dt = (currentTime - lastTime) / 1000;
+    lastTime = currentTime;
+    if (dt > 0.25) dt = 0.25; // Clamp spiral of death
+    accumulator += dt;
+
+    let updates = 0;
+    while (accumulator >= STEP && updates < 4) {
+      game.update(STEP);
+      accumulator -= STEP;
+      updates++;
+    }
+
+    game.render();
+    requestAnimationFrame(loop);
+  }
+
+  requestAnimationFrame(loop);
 }
 
-if (shot) runShot(shot);
-else runGame();
+// Boot game when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}
