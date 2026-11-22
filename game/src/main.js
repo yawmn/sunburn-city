@@ -13,7 +13,7 @@ import { createRenderer } from './render.js';
 import { createCar } from './vehicle.js';
 import { createTraffic } from './traffic.js';
 import { createPedestrians } from './pedestrians.js';
-import { createCombatSystem } from './combat.js';
+import { createCombatSystem, WEAPON_CONFIGS } from './combat.js';
 import { createPoliceSystem } from './police.js';
 import { createMissions } from './missions.js';
 import { stageShot } from './shots.js';
@@ -124,6 +124,18 @@ function boot() {
           this.screen = 'title';
           this.camera.target = null;
           return;
+        }
+
+        // Weapon cycling on mouse wheel
+        if (this.input.takePressed('weapon_prev')) {
+          const cur = this.combat.currentWeapon();
+          const idx = Math.max(0, WEAPON_CONFIGS.findIndex(w => w.id === cur.id));
+          this.combat.selectWeapon((idx - 1 + WEAPON_CONFIGS.length) % WEAPON_CONFIGS.length);
+        }
+        if (this.input.takePressed('weapon_next')) {
+          const cur = this.combat.currentWeapon();
+          const idx = Math.max(0, WEAPON_CONFIGS.findIndex(w => w.id === cur.id));
+          this.combat.selectWeapon((idx + 1) % WEAPON_CONFIGS.length);
         }
 
         // Vehicle Entry / Exit on E key

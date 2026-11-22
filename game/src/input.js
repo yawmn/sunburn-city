@@ -108,12 +108,21 @@ export function createInput(targetCanvas = null) {
     mousePressed = false;
   }
 
+  function onWheel(e) {
+    if (e.deltaY < 0) {
+      pressed.add('weapon_prev');
+    } else if (e.deltaY > 0) {
+      pressed.add('weapon_next');
+    }
+  }
+
   if (typeof window !== 'undefined') {
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('wheel', onWheel);
     window.addEventListener('contextmenu', onContextMenu);
     window.addEventListener('blur', onBlur);
   }
@@ -157,6 +166,8 @@ export function createInput(targetCanvas = null) {
         x *= invLen;
         y *= invLen;
       }
+      if (Math.abs(x) < 0.18) x = 0;
+      if (Math.abs(y) < 0.18) y = 0;
       return { x, y };
     },
     get sprint() {
@@ -184,6 +195,7 @@ export function createInput(targetCanvas = null) {
         window.removeEventListener('mousemove', onMouseMove);
         window.removeEventListener('mousedown', onMouseDown);
         window.removeEventListener('mouseup', onMouseUp);
+        window.removeEventListener('wheel', onWheel);
         window.removeEventListener('contextmenu', onContextMenu);
         window.removeEventListener('blur', onBlur);
       }
